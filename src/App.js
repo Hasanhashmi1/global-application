@@ -10,7 +10,7 @@ function App() {
   });
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/global-application">
       <Routes>
         <Route path="/login" element={
           isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login setIsAuthenticated={setIsAuthenticated} />
