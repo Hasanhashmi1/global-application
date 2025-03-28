@@ -68,3 +68,56 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 ### `npm run build` fails to minify
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+
+
+
+# Global Application - User Management Dashboard
+
+[![Live Demo](https://img.shields.io/badge/demo-live%20demo-brightgreen)](https://hasanhashmi1.github.io/global-application)
+![React](https://img.shields.io/badge/react-%2320232a.svg?logo=react&logoColor=%2361DAFB)
+![Bootstrap](https://img.shields.io/badge/bootstrap-%23563D7C.svg?logo=bootstrap&logoColor=white)
+
+A responsive React application featuring secure user authentication, CRUD operations, and advanced user management capabilities.
+
+![Application Screenshot](./public/screenshot.png)
+
+## Features
+
+- **User Authentication**
+  - Secure login/logout with JWT tokens
+  - Session persistence using localStorage
+  - Automatic redirect for unauthorized access
+
+- **User Management**
+  - Paginated user listing (6 users/page)
+  - Global search across all pages
+  - Filter by even/odd user IDs
+  - Edit user details in modal form
+  - Delete users with confirmation dialog
+
+- **Error Handling**
+  - Form validation for login/edit operations
+  - API error notifications with SweetAlert2
+  - Network error recovery system
+
+- **Responsive Design**
+  - Mobile-first approach
+  - Cross-browser compatibility
+  - Adaptive grid layout
+  - Touch-friendly interface
+
+## Tech Stack
+
+- **Frontend**: React 18
+- **State Management**: React Hooks
+- **Routing**: React Router 6
+- **Styling**: Bootstrap 5 + Custom CSS
+- **Notifications**: SweetAlert2
+- **Build Tool**: Create React App
+
+## Installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/Hasanhashmi1/global-application.git
+cd global-application
