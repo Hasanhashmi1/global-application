@@ -1,74 +1,112 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import './dashboard.css';
 
 const Dashboard = ({ setIsAuthenticated }) => {
   const navigate = useNavigate();
-  const [users, setUsers] = useState([]);
-  const [allUsers, setAllUsers] = useState([]);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterValue, setFilterValue] = useState('all');
-  const [editingUser, setEditingUser] = useState(null);
-  const [isFetchingAll, setIsFetchingAll] = useState(false);
+  const [state, setState] = useState({
+    users: [],
+    allUsers: [],
+    currentPage: 1,
+    totalPages: 2, // Hardcoded since we know there are only 2 pages
+    loading: false,
+    searchTerm: '',
+    filterValue: 'all',
+    editingUser: null,
+    isFetchingAll: false,
+    error: null
+  });
 
-  // Fetch users for current page
-  useEffect(() => {
-    fetchUsers(currentPage);
-  }, [currentPage]);
+  const API_KEY = 'reqres-free-v1';
 
-  // Fetch all users for global search
-  useEffect(() => {
-    const fetchAllUsers = async () => {
-      setIsFetchingAll(true);
-      try {
-        let allUsers = [];
-        const firstPage = await fetch(`https://reqres.in/api/users?page=1`);
-        const firstPageData = await firstPage.json();
-        allUsers = [...firstPageData.data];
-        setTotalPages(firstPageData.total_pages);
-
-        if (firstPageData.total_pages > 1) {
-          const promises = [];
-          for (let i = 2; i <= firstPageData.total_pages; i++) {
-            promises.push(fetch(`https://reqres.in/api/users?page=${i}`));
-          }
-          
-          const responses = await Promise.all(promises);
-          const data = await Promise.all(responses.map(res => res.json()));
-          
-          data.forEach(page => {
-            allUsers = [...allUsers, ...page.data];
-          });
+  // Fetch users for a specific page
+  const fetchUsers = useCallback(async (page) => {
+    setState(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      const response = await fetch(`https://reqres.in/api/users?page=${page}`, {
+        headers: {
+          'x-api-key': API_KEY,
+          'Accept': 'application/json'
         }
-        
-        setAllUsers(allUsers);
-      } catch (error) {
-        Swal.fire('Error', 'Failed to fetch all users', 'error');
-      } finally {
-        setIsFetchingAll(false);
-      }
-    };
-
-    fetchAllUsers();
+      });
+      
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      
+      const data = await response.json();
+      setState(prev => ({
+        ...prev,
+        users: data.data || [],
+        loading: false
+      }));
+    } catch (error) {
+      setState(prev => ({
+        ...prev,
+        error: error.message,
+        loading: false
+      }));
+      Swal.fire('Error', 'Failed to fetch users', 'error');
+    }
   }, []);
 
-  const fetchUsers = async (page) => {
-    setLoading(true);
+  // Fetch all users from both pages
+  const fetchAllUsers = useCallback(async () => {
+    setState(prev => ({ ...prev, isFetchingAll: true, error: null }));
     try {
-      const response = await fetch(`https://reqres.in/api/users?page=${page}`);
-      const data = await response.json();
-      setUsers(data.data);
-      setTotalPages(data.total_pages);
+      // Fetch both pages in parallel
+      const [page1Response, page2Response] = await Promise.all([
+        fetch(`https://reqres.in/api/users?page=1`, {
+          headers: {
+            'x-api-key': API_KEY,
+            'Accept': 'application/json'
+          }
+        }),
+        fetch(`https://reqres.in/api/users?page=2`, {
+          headers: {
+            'x-api-key': API_KEY,
+            'Accept': 'application/json'
+          }
+        })
+      ]);
+      
+      if (!page1Response.ok || !page2Response.ok) {
+        throw new Error(`HTTP error! status: ${!page1Response.ok ? page1Response.status : page2Response.status}`);
+      }
+      
+      const [page1Data, page2Data] = await Promise.all([
+        page1Response.json(),
+        page2Response.json()
+      ]);
+      
+      const allUsers = [
+        ...(page1Data.data || []),
+        ...(page2Data.data || [])
+      ];
+      
+      setState(prev => ({
+        ...prev,
+        allUsers,
+        isFetchingAll: false
+      }));
     } catch (error) {
-      Swal.fire('Error', 'Failed to fetch users', 'error');
-    } finally {
-      setLoading(false);
+      setState(prev => ({
+        ...prev,
+        error: error.message,
+        isFetchingAll: false
+      }));
+      Swal.fire('Error', 'Failed to fetch all users', 'error');
     }
-  };
+  }, []);
+
+  // Fetch users on page change
+  useEffect(() => {
+    fetchUsers(state.currentPage);
+  }, [state.currentPage, fetchUsers]);
+
+  // Fetch all users on mount
+  useEffect(() => {
+    fetchAllUsers();
+  }, [fetchAllUsers]);
 
   const handleDelete = async (userId) => {
     const result = await Swal.fire({
@@ -83,14 +121,24 @@ const Dashboard = ({ setIsAuthenticated }) => {
 
     if (result.isConfirmed) {
       try {
-        await fetch(`https://reqres.in/api/users/${userId}`, {
-          method: 'DELETE'
+        const response = await fetch(`https://reqres.in/api/users/${userId}`, {
+          method: 'DELETE',
+          headers: {
+            'x-api-key': API_KEY,
+            'Accept': 'application/json'
+          }
         });
         
-        setAllUsers(allUsers.filter(user => user.id !== userId));
-        setUsers(users.filter(user => user.id !== userId));
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        
+        setState(prev => ({
+          ...prev,
+          users: prev.users.filter(user => user.id !== userId),
+          allUsers: prev.allUsers.filter(user => user.id !== userId)
+        }));
         Swal.fire('Deleted!', 'User has been deleted.', 'success');
       } catch (error) {
+        setState(prev => ({ ...prev, error: error.message }));
         Swal.fire('Error', 'Failed to delete user', 'error');
       }
     }
@@ -105,49 +153,67 @@ const Dashboard = ({ setIsAuthenticated }) => {
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch(`https://reqres.in/api/users/${editingUser.id}`, {
+      const response = await fetch(`https://reqres.in/api/users/${state.editingUser.id}`, {
         method: 'PUT',
         headers: {
+          'x-api-key': API_KEY,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          first_name: editingUser.first_name,
-          last_name: editingUser.last_name,
-          email: editingUser.email
+          first_name: state.editingUser.first_name,
+          last_name: state.editingUser.last_name,
+          email: state.editingUser.email
         })
       });
 
-      if (response.ok) {
-        setAllUsers(allUsers.map(user => 
-          user.id === editingUser.id ? editingUser : user
-        ));
-        setUsers(users.map(user => 
-          user.id === editingUser.id ? editingUser : user
-        ));
-        setEditingUser(null);
-        Swal.fire('Success', 'User updated successfully', 'success');
-      }
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      
+      const updatedUser = await response.json();
+      
+      setState(prev => ({
+        ...prev,
+        users: prev.users.map(user => 
+          user.id === state.editingUser.id ? { ...user, ...updatedUser } : user
+        ),
+        allUsers: prev.allUsers.map(user => 
+          user.id === state.editingUser.id ? { ...user, ...updatedUser } : user
+        ),
+        editingUser: null
+      }));
+      Swal.fire('Success', 'User updated successfully', 'success');
     } catch (error) {
+      setState(prev => ({ ...prev, error: error.message }));
       Swal.fire('Error', 'Failed to update user', 'error');
     }
   };
 
-  const filteredUsers = searchTerm || filterValue !== 'all' 
-    ? allUsers.filter(user => {
-        const matchesSearch = 
-          searchTerm === '' || 
-          user.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.email.toLowerCase().includes(searchTerm.toLowerCase());
-        
-        const matchesFilter = 
-          filterValue === 'all' || 
-          (filterValue === 'even' && user.id % 2 === 0) || 
-          (filterValue === 'odd' && user.id % 2 !== 0);
-        
-        return matchesSearch && matchesFilter;
-      })
-    : users;
+  // Derived state for filtered users
+  const filteredUsers = React.useMemo(() => {
+    const source = (state.searchTerm || state.filterValue !== 'all') 
+      ? state.allUsers 
+      : state.users;
+
+    return (source || []).filter(user => {
+      const matchesSearch = 
+        state.searchTerm === '' || 
+        (user.first_name?.toLowerCase().includes(state.searchTerm.toLowerCase())) ||
+        (user.last_name?.toLowerCase().includes(state.searchTerm.toLowerCase())) ||
+        (user.email?.toLowerCase().includes(state.searchTerm.toLowerCase()));
+      
+      const matchesFilter = 
+        state.filterValue === 'all' || 
+        (state.filterValue === 'even' && user.id % 2 === 0) || 
+        (state.filterValue === 'odd' && user.id % 2 !== 0);
+      
+      return matchesSearch && matchesFilter;
+    });
+  }, [state.searchTerm, state.filterValue, state.users, state.allUsers]);
+
+  // Helper functions for state updates
+  const setSearchTerm = (term) => setState(prev => ({ ...prev, searchTerm: term }));
+  const setFilterValue = (value) => setState(prev => ({ ...prev, filterValue: value }));
+  const setEditingUser = (user) => setState(prev => ({ ...prev, editingUser: user }));
+  const setCurrentPage = (page) => setState(prev => ({ ...prev, currentPage: page }));
 
   return (
     <div className="dashboard-container">
@@ -158,21 +224,27 @@ const Dashboard = ({ setIsAuthenticated }) => {
         </button>
       </div>
 
+      {state.error && (
+        <div className="error-message">
+          Error: {state.error}
+        </div>
+      )}
+
       <div className="controls">
         <div className="search-box">
           <input
             type="text"
             placeholder="Search all users..."
-            value={searchTerm}
+            value={state.searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            disabled={isFetchingAll}
+            disabled={state.isFetchingAll}
           />
           <i className="search-icon">🔍</i>
-          {isFetchingAll && <span className="loading-text">Loading all users...</span>}
+          {state.isFetchingAll && <span className="loading-text">Loading all users...</span>}
         </div>
         
         <select 
-          value={filterValue} 
+          value={state.filterValue} 
           onChange={(e) => setFilterValue(e.target.value)}
           className="filter-select"
         >
@@ -182,18 +254,18 @@ const Dashboard = ({ setIsAuthenticated }) => {
         </select>
       </div>
 
-      {loading ? (
+      {state.loading ? (
         <div className="loading">Loading current page...</div>
       ) : (
         <>
           {filteredUsers.length === 0 ? (
             <div className="no-results">
-              {isFetchingAll ? 'Loading all users...' : 'No users found matching your criteria'}
+              {state.isFetchingAll ? 'Loading all users...' : 'No users found matching your criteria'}
             </div>
           ) : (
             <div className="user-cards">
               {filteredUsers.map(user => (
-                <div key={user.id} className="user-card">
+                <div key={`${user.id}-${user.email}`} className="user-card">
                   <img src={user.avatar} alt={`${user.first_name} ${user.last_name}`} />
                   <div className="user-info">
                     <h3>{user.first_name} {user.last_name}</h3>
@@ -218,27 +290,28 @@ const Dashboard = ({ setIsAuthenticated }) => {
             </div>
           )}
 
-          {!searchTerm && filterValue === 'all' && (
+          {!state.searchTerm && state.filterValue === 'all' && (
             <div className="pagination">
               <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1 || loading}
+                onClick={() => setCurrentPage(1)}
+                disabled={state.currentPage === 1 || state.loading}
+                className={state.currentPage === 1 ? 'active' : ''}
               >
-                Previous
+                Page 1
               </button>
-              <span>Page {currentPage} of {totalPages}</span>
               <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages || loading}
+                onClick={() => setCurrentPage(2)}
+                disabled={state.currentPage === 2 || state.loading}
+                className={state.currentPage === 2 ? 'active' : ''}
               >
-                Next
+                Page 2
               </button>
             </div>
           )}
         </>
       )}
 
-{editingUser && (
+      {state.editingUser && (
         <div className="modal-overlay" onClick={() => setEditingUser(null)}>
           <div className="modal-main-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
@@ -255,9 +328,9 @@ const Dashboard = ({ setIsAuthenticated }) => {
                 <label>First Name</label>
                 <input
                   type="text"
-                  value={editingUser.first_name}
+                  value={state.editingUser.first_name || ''}
                   onChange={(e) => setEditingUser({
-                    ...editingUser,
+                    ...state.editingUser,
                     first_name: e.target.value
                   })}
                   required
@@ -267,9 +340,9 @@ const Dashboard = ({ setIsAuthenticated }) => {
                 <label>Last Name</label>
                 <input
                   type="text"
-                  value={editingUser.last_name}
+                  value={state.editingUser.last_name || ''}
                   onChange={(e) => setEditingUser({
-                    ...editingUser,
+                    ...state.editingUser,
                     last_name: e.target.value
                   })}
                   required
@@ -279,9 +352,9 @@ const Dashboard = ({ setIsAuthenticated }) => {
                 <label>Email</label>
                 <input
                   type="email"
-                  value={editingUser.email}
+                  value={state.editingUser.email || ''}
                   onChange={(e) => setEditingUser({
-                    ...editingUser,
+                    ...state.editingUser,
                     email: e.target.value
                   })}
                   required

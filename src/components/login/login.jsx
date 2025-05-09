@@ -36,9 +36,10 @@ const Login = ({ setIsAuthenticated }) => {
   };
 
   async function loginUser(email, password) {
-    const response = await fetch('https://reqres.in/api/login', {
+    const response = await fetch("https://reqres.in/api/login", {
       method: "POST",
       headers: {
+        "x-api-key": "reqres-free-v1",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ email, password }),
